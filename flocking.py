@@ -13,6 +13,12 @@ plt.tight_layout()
 flock_colors = ['b','g','c','grey', 'darkviolet','gold']
 pred_color = 'r'
 
+#List of spherical obstacles that the birds will avoid
+#In the form of x,y,radius
+#Don't make radius too large or it will look really weird :)
+obstacles = []
+#obstacles = [[25,50,1],[75,50,4]]
+
 #Set number of blocks and number of birds in each flock
 #Don't set these too high or else perfomance will suffer!
 #These need to ints
@@ -68,24 +74,31 @@ Generates forces that cause birds to avoid running into the walls
 """
 def avoid_wall_obstacle_force(flocks):
 	forces = np.zeros((len(flocks), len(flocks[0]), 2))
+	c = 1000.0
+	d = 50.0
+	minv = max(2, min(sight_radius, 5))
 
 	#Inner function to calculate the force on the bird from the walls
 	def calculate_wall_force(bird):
-		c = 1000.0
-		minv = 8
 		force = [0,0]
-		if bird[0][0] < min(sight_radius, minv):
+		if bird[0][0] < minv:
 			force[0] += c/bird[0][0]**2
-		if 100 - bird[0][0] < min(sight_radius, minv):
+		if 100 - bird[0][0] < minv:
 			force[0] -= c/(100-bird[0][0])**2
-		if bird[0][1] < min(sight_radius, minv):
+		if bird[0][1] < minv:
 			force[1] += c/bird[0][1]**2
-		if 100 - bird[0][1] < min(sight_radius, minv):
+		if 100 - bird[0][1] < minv:
 			force[1] -= c/(100-bird[0][1])**2
 		return force
 
 	for i in xrange(len(flocks)):
 		forces[i] = map(calculate_wall_force, flocks[i])
+		for j in xrange(len(flocks[i])):
+			for obstacle in obstacles:
+				f = np.subtract(flocks[i][j][0], obstacle[0:2])
+				dist = np.linalg.norm(f)
+				if dist-obstacle[2] < minv:
+					forces[i][j] = np.add(forces[i][j], np.multiply(d*obstacle[2]/(dist-obstacle[2])**2, f))
 
 	return forces
 
@@ -201,7 +214,9 @@ pred_patch = plt.Polygon(gen_polygon(predator[0], predator[1]), alpha=1, color=p
 
 #Initialize the birds in the graph
 def init():
-	return ax
+	for obstacle in obstacles:
+		plt.gca().add_patch(plt.Circle((obstacle[0], obstacle[1]),radius=obstacle[2], color="black", animated=False))
+	return ax,
 
 def animate(i):
 	npatches = []
