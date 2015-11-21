@@ -46,9 +46,6 @@ pred_chase = 1
 #Rendering speeds
 interval = 20.0
 
-#Obstacles
-#TODO
-
 """ This function will randomly initialize the flocks"""
 def random_init_birds(num_flocks, num_birds_in_flock):
 	if num_flocks > len(flock_colors):
@@ -161,13 +158,13 @@ def separation_force(flocks):
 
 """Birds always want to be in motion: this force will drive them to try to maintain a constant flight speed of p*max_vel"""
 def motive_force(flocks):
-    forces = np.zeros((len(flocks), len(flocks[0]), 2))
-    c = 10.0
-    p = 0.75
-    for i in xrange(len(flocks)):
-    	forces[i] = map(lambda bird: np.multiply(c*p*bird_max_vel/np.linalg.norm(bird[1]), bird[1]), flocks[i])
+	forces = np.zeros((len(flocks), len(flocks[0]), 2))
+	c = 10.0
+	p = 0.75
+	for i in xrange(len(flocks)):
+		forces[i] = map(lambda bird: np.multiply(c*p*bird_max_vel/np.linalg.norm(bird[1]), bird[1]), flocks[i])
 
-    return forces
+	return forces
 
 """Produces the effect of a predator on the motion of the birds and on the motion of the predator itself
 The predator will track towards the closest bird in its sight radius
@@ -209,7 +206,7 @@ def gen_polygon(x, v):
 flocks = random_init_birds(num_flocks, num_birds_in_flock)
 patches = [[plt.Polygon(gen_polygon(flocks[i][j][0], flocks[i][j][1]), alpha=1, color=flock_colors[i]) for j in xrange(len(flocks[i]))] for i in xrange(len(flocks))]
 #Oh no it's a hawk!
-predator = [(95*random.random()+5, 95*random.random()+5), generate_random_velocity_vector(bird_max_vel)]
+predator = [[95*random.random()+5, 95*random.random()+5], generate_random_velocity_vector(bird_max_vel)]
 pred_patch = plt.Polygon(gen_polygon(predator[0], predator[1]), alpha=1, color=pred_color)
 
 #Initialize the birds in the graph
@@ -222,6 +219,8 @@ def animate(i):
 	npatches = []
 	global flocks
 	global patches
+	global predator
+	global pred_patch
 
 	#If this is the first frame, initialize the view!
 	if i==0:
@@ -244,28 +243,38 @@ def animate(i):
 	pred_force, flee_force = predator_force(flocks, predator)
 	#Sum the forces to obtain the total force on each bird!
 	total_force = sum_arrays(wall_force, coh_force, align_force, mot_force, sep_force, flee_force)
-	for i,flock in enumerate(flocks):
+
+	#Now we update the position and velocity of the birds according to the force
+	updatePositionVelocity(flocks, total_force, patches, npatches)
+
+	#Do the same for the predator
+	pred_wall_force = avoid_wall_obstacle_force([[predator]])[0][0]
+	updatePositionVelocityForPredator(predator, np.add(pred_wall_force,pred_force), pred_patch, npatches)
+
+	return npatches
+
+def updatePositionVelocity(agents, forces, patches, npatches):
+	for i,flock in enumerate(agents):
 		#Update position and velocities using velocity and force: assume birds have mass 1
 		positions = np.add(map(lambda bird: bird[0], flock), np.multiply(interval/1000.0,map(lambda bird: bird[1], flock)))
-		velocities = np.add(map(lambda bird: bird[1], flock), np.multiply(interval/1000.0,total_force[i]))
+		velocities = np.add(map(lambda bird: bird[1], flock), np.multiply(interval/1000.0,forces[i]))
 		#Cap velocities at max_vel
 		velocities = map(lambda velocity: velocity if np.linalg.norm(velocity) < bird_max_vel else np.divide(velocity, np.linalg.norm(velocity)/bird_max_vel), velocities)
 		#Update our flocks with the new positions
-		flocks[i] = map(lambda position, velocity: (position, velocity), positions, velocities)
+		agents[i] = map(lambda position, velocity: (position, velocity), positions, velocities)
 		newpolys = map(lambda bird: gen_polygon(bird[0], bird[1]), flock)
 		for j,poly in enumerate(newpolys):
-			#patches[i][j].set_alpha(1)
 			patches[i][j].set_xy(poly)
 			npatches.append(patches[i][j])
 
-	#Update predator position and info
-	pred_wall_force = avoid_wall_obstacle_force([[predator]])[0][0]
+	return npatches
+
+def updatePositionVelocityForPredator(predator, force, pred_patch, npatches):
 	pred_patch.set_xy(gen_polygon(predator[0], predator[1]))
 	predator[0] = np.add(predator[0], np.multiply(interval/1000.0, predator[1]))
-	predator[1] = np.add(predator[1], np.multiply(interval/1000.0, np.add(pred_force, pred_wall_force)))
+	predator[1] = np.add(predator[1], np.multiply(interval/1000.0, force))
 	#Cap predator velocity also!
 	predator[1] = predator[1] if np.linalg.norm(predator[1]) < pred_max_vel else np.divide(predator[1], np.linalg.norm(predator[1])/pred_max_vel)
-	#pred_patch.set_alpha(1)
 	npatches.append(pred_patch)
 
 	return npatches
